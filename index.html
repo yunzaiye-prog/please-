@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Please守恒</title>
+<link rel="icon" href="/please-/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/please-/manifest.json">
+<meta name="theme-color" content="#1EC06B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Please守恒">
 <style>
 /* ========== Reset & Variables ========== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1105,7 +1111,16 @@ function escapeHtml(str){const div=document.createElement('div');div.textContent
 // ==================== Init ====================
 function init(){buildRPE();addExercise();renderHome();document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.show').forEach(m=>m.classList.remove('show'))})}
 init();
-console.log('🏋️ Please守恒 v2 已就绪 - 组数控制·周热力图·编辑·分享');
+console.log('🏋️ Please守恒 v2 已就绪 - 组数控制·周热力图·编辑·分享·PWA');
+
+// Service Worker registration for PWA
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/please-/sw.js').then(reg=>{
+    console.log('SW registered:',reg.scope);
+  }).catch(err=>{
+    console.log('SW registration failed:',err);
+  });
+}
 </script>
 </body>
 </html>

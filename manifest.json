@@ -1,0 +1,21 @@
+{
+  "name": "Please守恒",
+  "short_name": "守恒",
+  "description": "健身记录与智能分析系统 - 每一次训练，都是对自己的承诺",
+  "start_url": "/please-/",
+  "scope": "/please-/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1EC06B",
+  "background_color": "#F5F6FA",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/please-/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "fitness", "lifestyle"]
+}
