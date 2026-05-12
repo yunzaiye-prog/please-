@@ -342,6 +342,20 @@ body{
       </div>
       <button class="btn btn-primary" onclick="saveProfile()">保存资料</button>
     </div>
+    <!-- BMI Display -->
+    <div class="card" style="text-align:center;">
+      <div class="card-title" style="margin-bottom:6px;">📏 身体质量指数 (BMI)</div>
+      <div style="font-size:40px;font-weight:700;color:var(--green);" id="bmiValue">--</div>
+      <div style="font-size:14px;color:var(--text-secondary);margin-top:2px;" id="bmiCategory">请先填写身高体重</div>
+    </div>
+    <!-- Settings -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">⚙️ 偏好设置</div>
+      <div class="flex-between" style="padding:4px 0;">
+        <span style="font-size:14px;">🧘 训练后拉伸提醒</span>
+        <button id="stretchToggle" class="btn btn-sm" style="background:var(--green);color:#fff;border:none;min-width:52px;" onclick="toggleStretchReminder()">开启</button>
+      </div>
+    </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:10px;">📈 体重趋势</div>
       <div class="chart-container" id="weightChart"></div>
@@ -382,6 +396,11 @@ body{
   </div>
 </div>
 
+<!-- Stretch Modal -->
+<div class="modal-overlay" id="stretchModal">
+  <div class="modal" id="stretchContent"></div>
+</div>
+
 <!-- Workout Detail / Share Modal -->
 <div class="modal-overlay" id="detailModal">
   <div class="modal" id="detailContent"></div>
@@ -405,7 +424,7 @@ body{
 // ==================== Data Layer ====================
 const STORAGE_KEY = 'please守恒_data';
 function loadData(){const r=localStorage.getItem(STORAGE_KEY);if(r){try{return JSON.parse(r)}catch(e){}}return getDefaultData()}
-function getDefaultData(){return{profile:{name:'健身者',height:null,weight:null,bodyFat:null,goal:'增肌'},workouts:[],bodyRecords:[]}}
+function getDefaultData(){return{profile:{name:'健身者',height:null,weight:null,bodyFat:null,goal:'增肌',stretchReminder:true},workouts:[],bodyRecords:[]}}
 function saveData(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d))}
 let appData = loadData();
 let editingWorkoutId = null; // Track edit mode
@@ -615,6 +634,7 @@ function saveWorkout(){
     appData.workouts.unshift(workout);
     showToast('训练记录已保存！💪');
     checkPR(workout);
+    showStretchAfterWorkout(workout.bodyParts);
   }
 
   // Auto body record
@@ -970,11 +990,72 @@ function generateRecommendation(workouts,profile,bodyPartDist){
   if(candidates.length===0)candidates=['腿'];
   const legCount=bodyPartDist['腿']||0;const hasLeg=candidates.includes('腿');let rp;if(hasLeg&&legCount<=Math.max(...Object.values(bodyPartDist),1)*.5)rp='腿';else rp=candidates[Math.floor(Math.random()*candidates.length)];
   let reason='';if(!trainedRecently.has(rp))reason=`${rp}部已超过72小时未训练，充分恢复后可进行高质量训练。`;else if(lastParts.includes(rp))reason=`虽然${rp}部最近练过，但作为互补部位配合训练效果更好。`;else reason=`根据你的训练历史，${rp}部训练频率相对较低，建议加强。`;
-  const exDB={'胸':['杠铃卧推 4组 8-12次','哑铃上斜卧推 3组 10-12次','蝴蝶机夹胸 3组 12-15次','双杠臂屈伸 3组 力竭'],'背':['引体向上 4组 力竭','杠铃划船 4组 8-10次','高位下拉 3组 10-12次','坐姿划船 3组 12次'],'腿':['杠铃深蹲 4组 6-8次','罗马尼亚硬拉 3组 8-10次','腿举 3组 10-12次','腿弯举 3组 12-15次'],'肩':['杠铃推举 4组 8-10次','哑铃侧平举 4组 12-15次','面拉 3组 15次','蝴蝶机反向飞鸟 3组 12-15次'],'手臂':['杠铃弯举 3组 10-12次','锤式弯举 3组 12次','绳索下压 3组 12-15次','过头臂屈伸 3组 12次'],'核心':['平板支撑 3组 力竭','悬垂举腿 3组 12-15次','俄罗斯转体 3组 20次','死虫式 3组 12次/侧']};
-  const recEx=exDB[rp]||[];
+  const exDB={
+  '胸':{
+    增肌:['杠铃卧推 4组 6-10次','哑铃上斜卧推 3组 8-12次','双杠臂屈伸 3组 力竭','蝴蝶机夹胸 3组 12-15次','上斜哑铃飞鸟 3组 12次','下斜卧推 3组 10-12次','绳索交叉夹胸 3组 12-15次','哑铃并握推 3组 10-12次','器械推胸 3组 10-12次','斯万推胸 3组 15次'],
+    减脂:['杠铃卧推 4组 12-15次','上斜哑铃卧推 3组 12-15次','蝴蝶机夹胸 3组 15-20次','双杠臂屈伸 3组 力竭','绳索交叉夹胸 3组 15次','哑铃飞鸟 3组 15次','俯卧撑 4组 力竭','器械推胸 3组 15次','TRX推胸 3组 15次','宽距俯卧撑 3组 力竭'],
+    力量:['杠铃卧推 5组 3-5次','上斜杠铃卧推 3组 5-8次','双杠臂屈伸负重 4组 6-8次','地板卧推 3组 5-8次','窄距卧推 3组 6-8次','暂停卧推 3组 5次','弹力带卧推 3组 5次','过顶推 3组 6次']
+  },
+  '背':{
+    增肌:['引体向上 4组 力竭','杠铃划船 4组 8-10次','高位下拉 3组 10-12次','坐姿划船 3组 12次','单臂哑铃划船 3组 10-12次','T杠划船 3组 10次','直臂下压 3组 12-15次','架上硬拉 3组 8-10次','反向飞鸟 3组 15次','海豹划船 3组 10次'],
+    减脂:['引体向上 4组 力竭','高位下拉 3组 12-15次','坐姿划船 3组 15次','杠铃划船 3组 12-15次','TRX划船 3组 15次','直臂下压 3组 15次','单臂哑铃划船 3组 12-15次','绳索面拉 3组 15次','反向飞鸟 3组 15次'],
+    力量:['负重引体向上 4组 3-5次','杠铃划船 5组 5-8次','传统硬拉 4组 3-5次','T杠划船 3组 6-8次','架上硬拉 3组 5-8次','单臂哑铃划船 3组 6-8次','潘德雷划船 3组 5-8次']
+  },
+  '腿':{
+    增肌:['杠铃深蹲 4组 6-10次','罗马尼亚硬拉 3组 8-10次','保加利亚分腿蹲 3组 10-12次','腿举 3组 10-12次','腿弯举 3组 12-15次','腿屈伸 3组 12-15次','臀推 3组 10-12次','高脚杯深蹲 3组 12次','北欧弯举 3组 力竭','行走箭步蹲 3组 12步'],
+    减脂:['杠铃深蹲 4组 12-15次','高脚杯深蹲 3组 15-20次','箭步蹲 3组 15次/侧','腿举 3组 15-20次','腿弯举 3组 15次','腿屈伸 3组 15次','跳箱 3组 10次','壶铃摆荡 3组 20次','保加利亚分腿蹲 3组 12-15次','臀桥 3组 20次'],
+    力量:['杠铃深蹲 5组 3-5次','传统硬拉 4组 3-5次','前蹲 3组 5-8次','腿举 3组 6-8次','罗马尼亚硬拉 3组 5-8次','箱式深蹲 3组 5次','暂停深蹲 3组 5次','臀推 3组 6-8次']
+  },
+  '肩':{
+    增肌:['杠铃推举 4组 8-10次','哑铃侧平举 4组 12-15次','阿诺德推举 3组 10-12次','蝴蝶机反向飞鸟 3组 12-15次','绳索面拉 3组 15次','前平举 3组 12次','俯身飞鸟 3组 15次','借力推举 3组 8-10次','直立划船 3组 10-12次','器械推肩 3组 10-12次'],
+    减脂:['哑铃推举 4组 12-15次','侧平举 4组 15-20次','面拉 3组 15次','前平举 3组 15次','俯身飞鸟 3组 15-20次','壶铃推举 3组 12-15次','战绳 3组 30秒','肩部环绕组合 3组 每动作15次'],
+    力量:['杠铃推举 5组 3-5次','借力推举 3组 5-8次','哑铃推举 3组 6-8次','坐姿推举 3组 5-8次','直立划船 3组 6-8次']
+  },
+  '手臂':{
+    增肌:['杠铃弯举 4组 8-12次','锤式弯举 3组 10-12次','绳索下压 3组 12-15次','过头臂屈伸 3组 10-12次','上斜哑铃弯举 3组 12次','窄距卧推 3组 8-10次','牧师凳弯举 3组 10-12次','法式弯举 3组 10-12次','集中弯举 3组 12次','双杠臂屈伸 3组 力竭'],
+    减脂:['杠铃弯举 3组 15次','锤式弯举 3组 15次','绳索下压 3组 15-20次','过头臂屈伸 3组 15次','俯身臂屈伸 3组 15次','21响礼炮 3组','绳索弯举 3组 15-20次','窄距俯卧撑 3组 力竭'],
+    力量:['杠铃弯举 4组 5-8次','窄距卧推 4组 5-8次','负重双杠臂屈伸 3组 6-8次','反握引体向上 3组 6-8次','锤式弯举 3组 6-8次']
+  },
+  '核心':{
+    增肌:['悬垂举腿 4组 12-15次','绳索卷腹 3组 12-15次','罗马椅侧屈 3组 12次/侧','平板支撑负重 3组 力竭','健腹轮 3组 10-12次','俄罗斯转体 3组 20次','龙旗 3组 力竭','下斜板卷腹 3组 15次','死虫式 3组 12次/侧','农夫行走 3组 30秒'],
+    减脂:['平板支撑 3组 力竭','登山者 3组 30秒','悬垂举腿 3组 15-20次','卷腹 3组 20次','自行车卷腹 3组 20次/侧','俄罗斯转体 3组 25次','波比跳 3组 15次','V字卷腹 3组 15次','侧平板 3组 30秒/侧','死虫式 3组 15次/侧'],
+    力量:['负重平板支撑 3组 力竭','健腹轮 3组 8-10次','负重悬垂举腿 3组 8-10次','龙旗 3组 力竭','绳索卷腹大重量 3组 8-10次','农夫行走 3组 40米']
+  }
+};
+  const partExs=exDB[rp]||exDB['胸'];const recEx=partExs[goal]||partExs['增肌']||Object.values(partExs)[0]||[];
   let intensity='';const lr=lastWorkout?(lastWorkout.rpe||7):7;if(daysSinceLast<=1&&lr>=8)intensity='中低强度 (RPE 6-7)，让身体充分恢复';else if(daysSinceLast>=4)intensity='中高强度 (RPE 7-8)，利用超量恢复期';else if(goal==='力量')intensity='高强度低次数 (RPE 8-9)，大重量 3-6次';else if(goal==='减脂')intensity='中高强度 (RPE 7-8)，缩短组间休息';else intensity='中等强度 (RPE 7-8)，8-12次/组，控制离心';
   let note='';const hasSwim=workouts.some(w=>w.type==='游泳'),hasCardio=workouts.some(w=>w.type==='有氧');if(goal==='减脂'&&!hasCardio&&!hasSwim)note='💡 减脂期建议每周加入1-2次有氧或游泳，加速脂肪燃烧。';else if(goal==='增肌'&&(hasCardio||hasSwim))note='💡 增肌期有氧不宜过多，每周1-2次低强度即可，避免影响力量训练恢复。';
-  return{bodyPart:rp,reason,exercises:recEx.slice(0,4),intensity,note}
+  return{bodyPart:rp,reason,exercises:recEx.slice(0,6),intensity,note}
+}
+
+// ==================== Stretch Recommendation ====================
+const stretchDB={
+  '胸':['门框胸肌拉伸 每侧30秒','双手背后交扣扩胸 30秒','侧卧胸椎旋转 每侧30秒','泡沫轴胸椎伸展 60秒'],
+  '背':['猫牛式 10次深呼吸','儿童式 60秒','悬挂拉伸 30秒','坐姿体前屈 30秒','泡沫轴上背滚动 60秒'],
+  '腿':['股四头肌拉伸 每侧30秒','腘绳肌拉伸 每侧30秒','髋屈肌拉伸 每侧30秒','蝴蝶拉伸 30秒','靠墙小腿拉伸 每侧30秒','鸽式 每侧30秒'],
+  '肩':['交叉手臂拉伸 每侧30秒','背后肩部拉伸 每侧30秒','门框肩部拉伸 30秒','毛巾肩部拉伸 每侧30秒'],
+  '手臂':['肱二头肌拉伸 每侧30秒','肱三头肌过顶拉伸 每侧30秒','手腕屈伸拉伸 每侧20秒','前臂拉伸 每侧20秒'],
+  '核心':['猫牛式 10次深呼吸','儿童式 60秒','仰卧扭转 每侧30秒','眼镜蛇式 30秒','侧卧拉伸 每侧30秒'],
+  '全身':['全身拉伸 60秒','猫牛式 10次','儿童式 60秒','下犬式 30秒','站立前屈 30秒'],
+  '游泳':['肩部环绕拉伸 60秒','背阔肌拉伸 每侧30秒','髋屈肌拉伸 每侧30秒','颈部拉伸 每侧20秒'],
+  '有氧':['股四头肌拉伸 每侧30秒','腘绳肌拉伸 每侧30秒','小腿拉伸 每侧30秒','髋屈肌拉伸 每侧30秒','梨状肌拉伸 每侧30秒']
+};
+
+function showStretchAfterWorkout(bodyParts){
+  if(!appData.profile.stretchReminder)return;
+  if(!bodyParts||bodyParts.length===0)return;
+  const stretches=[];const seen=new Set();
+  bodyParts.forEach(part=>{
+    const moves=stretchDB[part]||stretchDB['全身']||[];
+    moves.forEach(m=>{if(!seen.has(m)){seen.add(m);stretches.push(m)}});
+  });
+  const selected=stretches.slice(0,5);
+  if(selected.length===0)return;
+  let html=`<div class="modal-handle"></div><div class="card-title">🧘 训练后拉伸</div><div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">针对${bodyParts.join('、')}的拉伸建议，每个动作保持深呼吸</div>`;
+  selected.forEach(s=>{html+=`<div style="padding:10px 14px;margin-bottom:6px;background:var(--green-light);border-radius:var(--radius-xs);font-size:14px;">${s}</div>`});
+  html+=`<div style="font-size:12px;color:var(--text-muted);margin-top:8px;">💡 拉伸时不要弹震，感受肌肉的轻微拉伸感即可</div><div class="modal-actions"><button class="btn btn-sm btn-outline" onclick="closeModal('stretchModal')" style="width:100%;">知道了 ✓</button></div>`;
+  document.getElementById('stretchContent').innerHTML=html;
+  setTimeout(()=>showModal('stretchModal'),600);
 }
 
 // ==================== Render Record Form ====================
@@ -987,14 +1068,24 @@ function renderProfile(){
   document.getElementById('profileGoalDisplay').textContent=p.goal?`目标: ${p.goal}`:'设定目标，开始训练';
   document.getElementById('profileHeight').value=p.height||'';document.getElementById('profileWeight').value=p.weight||'';document.getElementById('profileBodyFat').value=p.bodyFat||'';
   document.querySelectorAll('#goalTags .part-tag').forEach(t=>{t.classList.toggle('active',t.dataset.part===p.goal)});
+  // BMI
+  const bmiVal=document.getElementById('bmiValue'),bmiCat=document.getElementById('bmiCategory');
+  if(p.height&&p.weight){const bmi=(p.weight/((p.height/100)**2)).toFixed(1);bmiVal.textContent=bmi;const h=p.height/100;let cat='',color='';if(bmi<18.5){cat='偏瘦';color='var(--blue)'}else if(bmi<24){cat='正常范围';color='var(--green)'}else if(bmi<28){cat='偏胖';color='var(--orange)'}else{cat='肥胖';color='var(--red)'}bmiVal.style.color=color;bmiCat.textContent=`${cat} · 理想体重 ${(18.5*h*h).toFixed(1)}-${(23.9*h*h).toFixed(1)} kg`}else{bmiVal.textContent='--';bmiVal.style.color='var(--green)';bmiCat.textContent='请先填写身高体重'}
+  // Stretch toggle
+  const tgl=document.getElementById('stretchToggle');tgl.textContent=p.stretchReminder!==false?'开启':'关闭';tgl.style.background=p.stretchReminder!==false?'var(--green)':'var(--border)';tgl.style.color=p.stretchReminder!==false?'#fff':'var(--text-muted)';
   renderWeightChart()
 }
 function saveProfile(){
   const height=parseFloat(document.getElementById('profileHeight').value)||null,weight=parseFloat(document.getElementById('profileWeight').value)||null,bodyFat=parseFloat(document.getElementById('profileBodyFat').value)||null;
   const gt=document.querySelector('#goalTags .part-tag.active');const goal=gt?gt.dataset.part:'增肌';
-  appData.profile={name:'健身者',height,weight,bodyFat,goal};
+  appData.profile={...appData.profile,name:'健身者',height,weight,bodyFat,goal};
   if(weight){const today=new Date().toISOString().split('T')[0];const exist=appData.bodyRecords.find(r=>r.date===today);if(exist){exist.weight=weight;exist.bodyFat=bodyFat}else{appData.bodyRecords.push({date:today,weight,bodyFat});if(appData.bodyRecords.length>365)appData.bodyRecords=appData.bodyRecords.slice(-365)}}
   saveData(appData);renderProfile();showToast('资料已保存 ✅')
+}
+function toggleStretchReminder(){
+  appData.profile.stretchReminder=!(appData.profile.stretchReminder!==false);
+  saveData(appData);renderProfile();
+  showToast(appData.profile.stretchReminder!==false?'拉伸提醒已开启 🧘':'拉伸提醒已关闭')
 }
 function renderWeightChart(){
   const container=document.getElementById('weightChart');const records=appData.bodyRecords;
